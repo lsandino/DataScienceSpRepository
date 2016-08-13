@@ -1,0 +1,211 @@
+---
+title: "Predicting Weight Lifting Exercises Quality using multi-sensor data"
+author: "Luis Sandino"
+output: html_document
+---
+
+***
+```{r,echo=FALSE,message=FALSE,results='hide'}
+library(lubridate)
+Sys.setlocale("LC_TIME", "English")
+```
+
+Created on `r now()` using R version `r getRversion()`
+
+The code for generating this report is available at:
+<https://github.com/lsandino/Practical-Machine-Learning-Course-Project.git>.
+
+***
+
+##Background
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, the main goal is to use data from accelerometers on the belt, forearm, arm, and dumbbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website: <http://groupware.les.inf.puc-rio.br/har> (see the section on the Weight Lifting Exercise Dataset).
+
+##Objective
+
+Participants were asked to perform one set of 10 repetitions
+of the Unilateral Dumbbell Biceps Curl in five different fashions:
+exactly according to the specification (Class A), throwing
+the elbows to the front (Class B), lifting the dumbbell
+only halfway (Class C), lowering the dumbbell only halfway
+(Class D) and throwing the hips to the front (Class E). Class
+A corresponds to the specified execution of the exercise,
+while the other 4 classes correspond to common mistakes.
+Participants were supervised by an experienced weight lifter
+to make sure the execution complied to the manner they
+were supposed to simulate.
+
+By processing data gathered from accelerometers on the participant's belt, forearm, arm, and dumbbell, using machine learning algorithms, the objective is to predict the activity quality (Class A-E).
+
+##Preparing data
+
+Load required libraries and set the seed:
+```{r,message=FALSE}
+library(caret)
+library(rpart)
+library(rattle)
+library(randomForest)
+library(gbm)
+library(ipred)
+library(plyr)
+library(e1071)
+library(knitr)
+set.seed(1984)
+```
+
+###Loading Data
+
+The data for this project come from this source:
+<http://groupware.les.inf.puc-rio.br/har>
+
+The training data for this project are available here:
+<https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv>
+
+The test data are available here:
+<https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv>
+
+The data come in CSV files. It is always advisable to first examine the files in a text editor to get a first sight of how the data is structured. It allows to see there are missing values coded as **NA**, **#DIV/0!** and an empty strings.
+
+Read data:
+```{r,cache=TRUE}
+dataset <- read.csv("pml-training.csv", na.strings=c("NA","#DIV/0!",""))
+test <- read.csv("pml-testing.csv", na.strings=c("NA","#DIV/0!",""))
+```
+
+###Cleaning Data
+
+Examine variable names:
+```{r,cache=TRUE}
+varnames <- names(dataset)
+varnames
+idx <- which(!varnames==names(test))
+idx
+names(test)[idx]
+```
+
+In order to properly train the models all variables that are not direct measurements from the sensors are dropped from the dataset. Although Euler angles (roll, pitch and yaw) are variables usually estimated from gyroscope, accelerometer and magnetometer measurements, they are kept as this information (sensor attitude) could be important for activity classification purposes.
+```{r,cache=TRUE}
+v1 <- grep("total",varnames)
+v2 <- grep("kurtosis",varnames)
+v3 <- grep("skewness",varnames)
+v4 <- grep("max",varnames)
+v5 <- grep("min",varnames)
+v6 <- grep("amplitude",varnames)
+v7 <- grep("var",varnames)
+v8 <- grep("avg",varnames)
+v9 <- grep("stddev",varnames)
+dataset <- dataset[,sort(-c(1:7,v1,v2,v3,v4,v5,v6,v7,v8,v9))]
+test <- test[,sort(-c(1:7,v1,v2,v3,v4,v5,v6,v7,v8,v9))]
+dataset$classe <- factor(dataset$classe)
+test$problem_id <- factor(test$problem_id)
+dim(dataset)
+dim(test)
+```
+
+###Paritioning data
+
+The training dataset provided is divided in a training sub-set with 75% of the data and a validation set with the remaining 25%:
+```{r,cache=TRUE}
+inTrain = createDataPartition(dataset$classe, p = 3/4, list=FALSE)
+train = dataset[ inTrain,]
+validation = dataset[-inTrain,]
+dim(train)
+dim(validation)
+```
+
+##Model training
+
+Four different models are trained: Decision Trees, Random Forest, Bagging and Boosting.
+
+###Cross Validation Setup
+
+The k-fold cross validation method involves splitting the training dataset into k-subsets. For each subset is held out while the model is trained on all other subsets. This process is completed until accuracy is determine for each instance in the dataset, and an overall accuracy estimate is provided. For all the algorithm tested, a 3-fold cross validation method without repetition is used. 
+```{r,cache=TRUE}
+fitControl <- trainControl(method = "cv",
+                           number = 3,
+                           repeats = 1)
+```
+
+###Decision trees
+
+Train the model:
+```{r,cache=TRUE}
+fit1.mod <- suppressMessages(train(classe~.,data=train,trControl=fitControl,method="rpart"))
+fancyRpartPlot(fit1.mod$finalModel)
+```
+
+Prediction with the trained model:
+```{r,cache=TRUE}
+fit1.pred <- predict(fit1.mod,newdata=validation)
+fit1.CM <- confusionMatrix(validation$classe,fit1.pred)
+fit1.CM
+```
+
+###Random Forest
+
+Train the model:
+```{r,cache=TRUE}
+fit2.mod <- suppressMessages(train(classe~.,data=train,trControl=fitControl,method="rf"))
+```
+
+Prediction with the trained model:
+```{r,cache=TRUE}
+fit2.pred <- predict(fit2.mod,newdata=validation)
+fit2.CM <- confusionMatrix(validation$classe,fit2.pred)
+fit2.CM
+```
+
+###Bagging
+
+Train the model:
+```{r,cache=TRUE,warning=FALSE}
+fit3.mod <- suppressMessages(train(classe~.,data=train,trControl=fitControl,method="treebag"))
+```
+
+Prediction with the trained model:
+```{r,cache=TRUE}
+fit3.pred <- predict(fit3.mod,newdata=validation)
+fit3.CM <- confusionMatrix(validation$classe,fit3.pred)
+fit3.CM
+```
+
+###Boosting
+
+Train the model:
+```{r,cache=TRUE,results='hide'}
+fit4.mod <- suppressMessages(train(classe~.,data=train,trControl=fitControl,method="gbm"))
+```
+
+Prediction with the trained model:
+```{r,cache=TRUE}
+fit4.pred <- predict(fit4.mod,newdata=validation)
+fit4.CM <- confusionMatrix(validation$classe,fit4.pred)
+fit4.CM
+```
+
+##Model selection
+
+The accuracy and out of sample error of the four models are compared in order to select the final model. 
+```{r,cache=TRUE}
+fit1.ac <- round(100*fit1.CM$overall[1],2)
+fit2.ac <- round(100*fit2.CM$overall[1],2)
+fit3.ac <- round(100*fit3.CM$overall[1],2)
+fit4.ac <- round(100*fit4.CM$overall[1],2)
+accuracy <- data.frame(c(fit1.ac,100-fit1.ac),c(fit2.ac,100-fit2.ac),c(fit3.ac,100-fit3.ac),c(fit4.ac,100-fit4.ac),row.names=c("Accuracy (%)","Out of sample error (%)"))
+names(accuracy) <- c("Decision Trees","Random Forest","Bagging","Boosting")
+kable(accuracy)
+```
+
+The Model trained with the Random Forest algorithm is the best with an accuracy of **`r fit2.ac`%** and an out of sample error of **`r 100-fit2.ac`%**.
+
+##Model testing
+
+Finally, the model obtained with the Random Forest is tested:
+```{r,cache=TRUE}
+result <- data.frame(test$problem_id,predict(fit2.mod,newdata=test))
+names(result) <- c("Problem ID","Prediction")
+kable(result)
+```
+
+This prediction yields a **100%** score in the Quiz.
+

@@ -1,0 +1,121 @@
+---
+title: "Motor Trend: The Effect Of Transmission Type On Fuel Economy"
+author: "Luis Sandino"
+output: pdf_document
+geometry: margin=1cm
+fontsize: 10pt
+---
+
+***
+```{r,echo=FALSE,message=FALSE,results='hide'}
+library(lubridate)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library (datasets)
+library(GGally)
+library(knitr)
+Sys.setlocale("LC_TIME", "English")
+#options(scipen = 999)
+```
+
+Created on `r now()` using R version `r getRversion()`
+
+***
+
+##Executive Summary
+
+This report studies the effect of transmission type (automatic or manual) on fuel economy in Miles Per Gallon (MPG). More precisely, the MPG difference between automatic and manual transmissions is quantified with single and multi-variable linear regression models using the `mtcars` data set available in R library `datasets`, in order to determine which type of transmission is better for MPG.
+
+The analysis showed that **no significant difference in MPG can be satated between the automatic and manual transmission** with the given data. However, it seems that car weight and 6 cylinder engines have greater impact on MPG. With 95% confidence, a **1000lb** increase in weight results in a **0.68 to 4.32 decrease** in MPG, and a change from **4** cylinders to **6** results in a **0.14 to 5.92** decrease in MPG.
+
+##Exploratory Analysis
+
+Load data and examine variables:
+```{r}
+data(mtcars)
+head(mtcars,3)
+```
+The `mtcars` data set has `r ncol(mtcars)` variables for  `r nrow(mtcars)` different car models (observations). These variables are: **mpg**: Miles/(US) gallon; **cyl**: Number of cylinders; **disp**: Displacement (cu.in.); **hp**: Gross horsepower; **drat**: Rear axle ratio; **wt**: Weight (1000 lbs); **qsec**: 1/4 mile time; **vs**: Engine (0 = V, 1 = straight); **am**: Transmission (0 = automatic, 1 = manual); **gear**: Number of forward gears; **carb**: Number of carburetors. Variables **`cyl`**, **`vs`**, **`gear`**, **`carb`** and **`am`** are treated as factor variables in the analysis. Fig 1 (See Appendix) shows a pairs plot for this data set.  
+
+```{r,echo=FALSE}
+mtcars$cyl <- factor(mtcars$cyl)
+mtcars$vs <- factor(mtcars$vs,labels=c('V','S'))
+mtcars$gear <- factor(mtcars$gear)
+mtcars$carb <- factor(mtcars$carb)
+mtcars$am <- factor(mtcars$am,labels=c('Auto','Manual'))
+```
+
+##Single variable linear regression
+
+Firstly, the relationship between MPG and transmission type is studied with a single variable linear regression:
+```{r}
+fit1 <- lm(mpg ~ am,data=mtcars)
+summary1 <- summary(fit1)
+print(summary1$coefficients)
+```
+
+The $R^2$ value obtained with the model above is __`r round(summary1$r.squared,4)`__, which means that only the __`r round((summary1$r.squared)*100,0)`%__ of total variability is explained by this simple regression model.
+
+##Multivariable linear regression
+
+In order to improve the model, several variables should be included in the linear regression. The candidates are those variables with high correlation with MPG. As can be seen in Fig 1 (See Appendix), these are **`wt`**, **`disp`** and **`hp`** with correlation values `r round(cor(mtcars$wt,mtcars$mpg),4)`, `r round(cor(mtcars$disp,mtcars$mpg),4)` and `r round(cor(mtcars$hp,mtcars$mpg),4)`, respectively. Regarding factor variables, it seems reasonable to also include **`cyl`** in the model, as the number of cylinders is expected to be directly related to fuel consumption. After trying several combinations, the best fit is obtained with **`am`**, **`cyl`**, **`wt`** and **`hp`**:
+```{r}
+fit2 <- lm(mpg ~ am + cyl + wt + hp,data=mtcars)
+summary2 <- summary(fit2)
+print(summary2$coefficients)
+```
+ 
+The adjusted $R^2$ value obtained with the model above is __`r round(summary2$adj.r.squared,4)`__, which means that __`r round((summary2$adj.r.squared)*100,0)`%__ of total variability is explained by this model.
+
+##Residuals and Diagnostics
+
+As can be seen in Fig 2 (See Appendix), the Residuals vs Fitted and the Scale-Location plots seem to be randomly scattered, which indicates there are no patterns for missing variables and heteroskedasticity. The Normal Q-Q plot indicates the residuals are normally distributed. Finally, the Residuals vs Leverage plot tells that data from *Toyota Corolla* and *Chrysler Imperial* have substantial influence on the regression model.
+
+##Inference and Conclusion
+
+Confidence intervals for the model parameters are calculated as follows:
+```{r,eval=FALSE}
+sum <- summary2$coefficients
+round(sum[i,1] + c(-1,1)*qt(.975,df=fit2$df)*sum[i,2],2)
+```
+```{r,echo=FALSE}
+sum <- summary2$coefficients
+#Intercept (reference is 4 cylinders with automatic transmission)
+int1 <- round(sum[1,1] + c(-1,1)*qt(.975,df=fit2$df)*sum[1,2],2)
+#amManual
+int2 <- round(sum[2,1] + c(-1,1)*qt(.975,df=fit2$df)*sum[2,2],2)
+#cyl6
+int3 <- round(sum[3,1] + c(-1,1)*qt(.975,df=fit2$df)*sum[3,2],2)
+#cyl8
+int4 <- round(sum[4,1] + c(-1,1)*qt(.975,df=fit2$df)*sum[4,2],2)
+#wt
+int5 <- round(sum[5,1] + c(-1,1)*qt(.975,df=fit2$df)*sum[5,2],2)
+#hp
+int6 <- round(sum[6,1] + c(-1,1)*qt(.975,df=fit2$df)*sum[6,2],2)
+```
+```{r,echo=FALSE}
+results <- data.frame(c("mean MPG (4 cyl, Auto)","am Manual","cyl 6","cyl 8","wt","hp"),c(int1[1],int2[1],int3[1],int4[1],int5[1],int6[1]),c(int1[2],int2[2],int3[2],int4[2],int5[2],int6[2]))
+names(results) <- c("Variable","Conf. Int. low","Conf. Int. high")
+kable(results,align='c',caption="Confidence intervals for model parameters")
+```
+
+As can be seen, with 95% confidence, the mean MPG for the reference (4 cylinder, automatic transmission) is in the interval **[28.35 39.06]**. Regarding p-values (look multi-variable linear regression model), they  are less than 0.05 for `cyl6`, `wt` and `hp` only. Therefore, in this cases the null hypothesis (difference in the mean equal to 0) is rejected . There is strong evidence in favor of the alternative hypothesis: *true difference in means is not equal to 0*. On the contrary, p-value is grater than 0.05 for `cyl8` and `am`, the principal variable of interest in this analysis. Thus, in this two cases null hypothesis rejection fails. This study concludes that *no difference in MPG can be satated between the automatic and manual transmission* with the given data. Nevertheless, it seems variables `wt` and `cyl6` have greater impact on MPG. With 95% confidence, a **1000lb** increase in weight results in a **0.68 to 4.32 decrease** in MPG, and a change from **4** cylinders to **6** results in a **0.14 to 5.92** decrease in MPG.
+
+\clearpage
+
+##Appendix
+
+Fig. 1 Pairs plot for `mtcars` data set. Diagonal: *Density plot* for Continuous vs. Continuous and *Bar plot* for Continuous vs. Discrete. Upper: *Scatter plot* with regression line for Continuous vs. Continuous and *Box plot* for Continuous vs. Discrete. Lower: *Correlation* for Continuous vs. Continuous only.
+
+```{r,echo=FALSE,results='asis',cache=TRUE,fig.width=9,fig.height=8,fig.align="center"}
+ggpairs(mtcars,upper=list(continuous="smooth",combo="box",discrete="blank"),lower=list(continuous="cor",combo="blank",discrete="blank"),diag=list(continuous="densityDiag",discrete="barDiag"))
+```
+
+\clearpage
+
+Fig. 2 Residuals and Diagnostics plot
+
+```{r,echo=FALSE,results='asis',cache=TRUE,fig.align="center"}
+par(mfrow = c(2, 2)); plot(fit2)
+```

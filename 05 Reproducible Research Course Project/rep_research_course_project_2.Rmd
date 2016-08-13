@@ -1,0 +1,184 @@
+---
+title: On the effect of severe weather events on public health and economy in the
+  US
+author: "Luis Sandino"
+output: 
+  html_document:
+    keep_md: yes
+    theme: journal
+---
+
+***
+```{r,echo=FALSE,message=FALSE,results='hide'}
+library(lubridate)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+Sys.setlocale("LC_TIME", "English")
+options(scipen = 999)
+```
+
+Created on `r now()` using `r R.version$version.string`
+
+***
+
+## Synopsis
+
+Storms and other severe weather events can cause both public health and economic problems for communities and municipalities. Many severe events can result in fatalities, injuries, and property damage, and preventing such outcomes to the extent possible is a key concern.
+
+This report involves exploring the U.S. National Oceanic and Atmospheric Administration's (NOAA) storm database. This database tracks characteristics of major storms and weather events in the United States, including when and where they occur, as well as estimates of any fatalities, injuries, and property damage.
+
+In particular, this report addresses the following questions across the United States:
+
+1. Which types of events are most harmful with respect to population health?
+2. Which types of events have the greatest economic consequences?
+
+***
+
+## Data Processing
+
+List of R libraries loaded:
+```{r,echo=TRUE}
+(.packages())
+```
+
+Download and read data from the U.S. National Oceanic and Atmospheric Administration's (NOAA) storm database:
+```{r,echo=TRUE,cache=TRUE}
+if(!file.exists("storm_data.csv.bz2"))
+        {
+        file_url <- "https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2"
+        download.file(file_url,"storm_data.csv.bz2")
+        }
+dataset <- tbl_df(read.csv(bzfile("storm_data.csv.bz2")))
+```
+
+Examine variable names:
+```{r,echo=TRUE}
+names(dataset)
+```
+
+As can be seen, relevant variables for this analysis are:
+
+>* *EVTYPE*: type of event
+>* *FATALITIES*: total number of fatalities related to the event
+>* *INJURIES*: total number of injuries related to the event
+>* *PROPDMG*: estimated amount of property damage casued by event (in $)
+>* *PROPDMGEXP*: multiplier for PROPDMG
+>* *CROPDMG*: estimated amount of crop damage casued by event (in $)
+>* *CROPDMGEXP*: multiplier for CROPDMG
+
+Extract relevant variables from dataset:
+```{r,echo=TRUE}
+storm_data <- select(dataset,EVTYPE,FATALITIES,INJURIES,PROPDMG,PROPDMGEXP,CROPDMG,CROPDMGEXP)
+```
+
+Examine event types:
+```{r,echo=TRUE}
+unique(storm_data$EVTYPE)
+```
+
+As can be seen, there are summary entries that can be dropped from the analysis, as we are interested in individual events only.
+
+Capitalize event names and drop summary entries:
+```{r,echo=TRUE}
+storm_data <- storm_data %>% mutate(EVTYPE = toupper(EVTYPE))
+idx <- grep("SUMMARY",storm_data$EVTYPE)
+storm_data <- storm_data[-idx,]
+```
+
+Group data by event type:
+```{r,echo=TRUE}
+storm_data <- storm_data %>% group_by(EVTYPE)
+```
+
+### Damage to public health
+
+Select FATALITIES and INJURIES variables in order to analyze damage to public health. Then, calculate total values per event and arrange data in descending order. Finally, drop events with zero fatalities and zero injuries:
+```{r,echo=TRUE}
+storm_data_health <- storm_data %>% 
+                     select(EVTYPE,FATALITIES,INJURIES) %>%
+                     summarize(TOTAL_FATALITIES = sum(FATALITIES),TOTAL_INJURIES = sum(INJURIES)) %>%
+                     arrange(desc(TOTAL_FATALITIES),desc(TOTAL_INJURIES))
+storm_data_health <- filter(storm_data_health,TOTAL_FATALITIES>0&TOTAL_INJURIES>0)
+head(storm_data_health,10)
+```
+
+### Damage to the economy
+
+Select PROPDMG and CROPDMG variables in order to analyze damage to the economy and drop events with zero losses.
+```{r,echo=TRUE}
+storm_data_economy <- storm_data %>% 
+                      select(EVTYPE,PROPDMG,PROPDMGEXP,CROPDMG,CROPDMGEXP)
+storm_data_economy <- filter(storm_data_economy,PROPDMG>0&CROPDMG>0)
+```
+
+Examine multipliers variables first:
+```{r,echo=TRUE}
+unique(storm_data_economy$PROPDMGEXP)
+unique(storm_data_economy$CROPDMGEXP)
+```
+
+Create a lookup matrices according to the previous multipliers:
+```{r,echo=TRUE}
+lookup_prop <- data.frame(unique(storm_data_economy$PROPDMGEXP),
+                          c(1E+09,1E+06,1E+06,1E+03,1E+05,1,1,1E+03))
+names(lookup_prop) <- c("MULT","VALUE")
+print(lookup_prop)
+lookup_crop <- data.frame(unique(storm_data_economy$CROPDMGEXP),
+                          c(1E+06,1E+03,1E+06,1E+03,1E+09,1,1))
+names(lookup_crop) <- c("MULT","VALUE")
+print(lookup_crop)
+```
+
+Use lookup matrices to replace multipliers with numeric values:
+```{r,echo=TRUE}
+idx_vect <- match(storm_data_economy$PROPDMGEXP,lookup_prop$MULT)
+storm_data_economy$PROPDMGEXP <- lookup_prop$VALUE[idx_vect]
+idx_vect <- match(storm_data_economy$CROPDMGEXP,lookup_crop$MULT)
+storm_data_economy$CROPDMGEXP <- lookup_crop$VALUE[idx_vect]
+```
+
+Calculate total losses per event and arrange data in descending order:
+```{r,echo=TRUE}
+storm_data_economy <- storm_data_economy %>% 
+                      mutate(PROPDMG = PROPDMG*PROPDMGEXP,CROPDMG = CROPDMG*CROPDMGEXP) %>%
+                      summarize(TOTAL_PROPDMG = sum(PROPDMG),TOTAL_CROPDMG = sum(CROPDMG)) %>%
+                      arrange(desc(TOTAL_PROPDMG),desc(TOTAL_CROPDMG))
+head(storm_data_economy,10)
+```
+
+## Results
+
+### 1. Which types of events are most harmful with respect to population health?
+
+To answer this question, plot the total number of fatalities and injuries per event for the worst 10 in **logaritmic scale**:
+```{r,echo=TRUE}
+data <- gather(storm_data_health[1:10,],"variable","value",TOTAL_FATALITIES,TOTAL_INJURIES,factor_key = TRUE)
+windows()
+p <- ggplot(data,aes(x = reorder(EVTYPE,-log10(value)),y = log10(value))) + 
+     geom_bar(aes(fill = variable),stat = "identity",position = "stack") +
+     theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+     labs(title ="Fatalities and injuries per event",
+          x = "Event", y = expression('Total Number [log'[10]*']')) +
+     scale_fill_discrete(name = "Legend",labels = c("Fatalities", "Injuries"))
+print(p)
+```
+
+As can be seen in the figure, the type of event which causes more deaths and injuries in the US is a Tornado
+
+### 2. Which types of events have the greatest economic consequences?
+
+To answer this question, plot the total number of property and crop losses per event for the worst 10 in **logaritmic scale**:
+```{r,echo=TRUE}
+data <- gather(storm_data_economy[1:10,],"variable","value",TOTAL_PROPDMG,TOTAL_CROPDMG,factor_key = TRUE)
+windows()
+p <- ggplot(data,aes(x = reorder(EVTYPE,-log10(value)),y = log10(value))) + 
+     geom_bar(aes(fill = variable),stat = "identity",position = "stack") +
+     theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+     labs(title ="Property and Crop Losses per event",
+          x = "Event", y = expression('Estimated losses [log'[10]*'($USD)]')) +
+     scale_fill_discrete(name = "Legend",labels = c("Property", "Crop"))
+print(p)
+```
+
+As can be seen in the figure, the type of events which cause more economic losses in the US are Floods

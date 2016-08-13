@@ -1,0 +1,215 @@
+---
+title: "Reproducible Research: Peer Assessment 1"
+author: "Luis Sandino"
+output: 
+  html_document:
+    keep_md: yes
+    theme: journal
+---
+
+***
+```{r,echo=FALSE,message=FALSE,results='hide'}
+library(lubridate)
+library(dplyr)
+library(lattice)
+Sys.setlocale("LC_TIME", "English")
+options(scipen = 1, digits = 2)
+```
+
+Created on `r now()` using `r R.version$version.string`
+
+***
+
+## Loading and preprocessing the data
+
+Read CSV file
+```{r,echo = TRUE}
+activity <- read.csv("activity.csv")
+```
+
+Print some data and examine data structure
+```{r,echo=TRUE}
+head(activity)
+str(activity)
+summary(activity)
+```
+
+Change date column type from factor to Date
+```{r,echo=TRUE}
+activity$date <- as.Date(activity$date)
+```
+
+Subset data to remove NAs
+```{r,echo=TRUE}
+activity.sub <- subset(activity,!is.na(activity$steps))
+```
+
+## What is mean total number of steps taken per day?
+
+Organize data subset by date
+```{r,echo=TRUE}
+activity.sub <- group_by(activity.sub,date)
+```
+
+Calculate the total number of steps taken per day
+```{r,echo=TRUE}
+steps.per.day <- summarize(activity.sub,total=sum(steps))
+print(steps.per.day)
+```
+
+Plot the total number of steps taken per day
+```{r,echo=TRUE,label=Fig1}
+plot(steps.per.day$total ~ steps.per.day$date,type="h",lwd=2,
+     main="Total number of steps taken per day",
+     xlab="Date",ylab="Total number of steps")
+abline(h=mean(steps.per.day$total),lwd=2,col="green")
+```
+
+Plot the histogram of total number of steps taken per day
+```{r,echo=TRUE,label=Fig2}
+hist(steps.per.day$total,density=10,
+     main="Histogram of total number of steps taken per day",
+     xlab="Total number of steps")
+```
+
+Calculate and report the mean and median of the total number of steps taken per day
+```{r,echo=TRUE}
+steps.mean <- mean(steps.per.day$total)
+steps.median <- median(steps.per.day$total)
+```
+
+Mean: __`r mean(steps.mean)`__
+
+Median: __`r median(steps.median)`__
+
+## What is the average daily activity pattern?
+
+Organize data by time interval
+```{r,echo=TRUE}
+activity <- group_by(activity,interval)
+```
+
+Calculate the number of steps taken per interval, averaged across all days
+```{r,echo=TRUE}
+steps.per.interval <- summarize(activity,avg=mean(steps,na.rm=TRUE))
+```
+
+Look for the 5-minute interval, on average across all the days, which contains the maximum number of steps
+```{r,echo=TRUE}
+int.max.idx <- which.max(steps.per.interval$avg)
+int.max <- steps.per.interval$interval[int.max.idx]
+steps.max <- steps.per.interval$avg[int.max.idx]
+```
+
+Plot the number of steps taken per interval, averaged across all days
+```{r,echo=TRUE,label=Fig3}
+plot(steps.per.interval$avg ~
+     steps.per.interval$interval,type="l",lwd=2,
+     main="Number of steps taken per interval (averaged across days)",
+     xlab="Time interval",ylab="Number of steps")
+abline(v=int.max,h=steps.max,lwd=1,col="red")
+```
+
+The 5-minute interval __`r int.max`__ contains the maximum number of steps averaged across days (__`r steps.max`__)
+
+## Imputing missing values
+
+Calculate and report the total number of missing values in the dataset
+```{r,echo=TRUE}
+total.NAs <- sum(is.na(activity$steps))
+per.NAs <- mean(is.na(activity$steps))
+print(total.NAs)
+print(per.NAs)
+```
+
+As can be seen, there are __`r total.NAs`__ NAs in the dataset which represent the __`r per.NAs*100`%__ of the data  
+
+Create a new dataset filling in all of the missing values in the original dataset using the _interval avegarge across days_
+```{r,echo=TRUE}
+idx <- is.na(activity$steps)
+activity.new <- activity
+activity.new[idx,"steps"] <- steps.per.interval$avg[match(activity$interval[idx],steps.per.interval$interval)]
+```
+
+Organize new data by date
+```{r,echo=TRUE}
+activity.new <- group_by(activity.new,date)
+```
+
+Calculate the total number of steps taken per day
+```{r,echo=TRUE}
+steps.per.day.new <- summarize(activity.new,total=sum(steps))
+print(steps.per.day.new)
+```
+
+Plot the total number of steps taken per day
+```{r,echo=TRUE,label=Fig4}
+par(mfrow=c(1,2),oma=c(2,1,2,0))
+plot(steps.per.day$total ~ steps.per.day$date,type="h",lwd=2,
+     main="Original dataset",
+     xlab="Date",ylab="Total number of steps")
+abline(h=mean(steps.per.day$total),lwd=2,col="green")
+plot(steps.per.day.new$total ~ steps.per.day.new$date,type="h",lwd=2,
+     main="New dataset with filled NAs",
+     xlab="Date",ylab="")
+abline(h=mean(steps.per.day.new$total),lwd=2,col="green")
+title("Total number of steps taken per day", outer=TRUE)
+```
+
+As can be seen, the gaps in the original data are filled but there is no change in the mean
+
+Plot the histogram of total number of steps taken per day
+```{r,echo=TRUE,label=Fig5}
+par(mfrow=c(1,2),oma=c(2,1,2,0))
+hist(steps.per.day$total,density=10,
+     main="Original dataset",
+     xlab="Total number of steps")
+hist(steps.per.day.new$total,density=10,
+     main="New dataset with filled NAs",
+     xlab="Total number of steps")
+title("Histogram of total number of steps taken per day", outer=TRUE)
+```
+
+As can be seen, the y-axis values change a little, but the distribution of the data is quite similar
+
+Calculate and report the mean and median of the total number of steps taken per day
+```{r,echo=TRUE}
+steps.mean.new <- mean(steps.per.day.new$total)
+steps.median.new <- median(steps.per.day.new$total)
+```
+
+New mean: __`r mean(steps.mean.new)`__
+
+New median: __`r median(steps.median.new)`__
+
+As mentioned before, the mean doesn't change. The median changes and becomes equal to the mean in this case.
+
+## Are there differences in activity patterns between weekdays and weekends?
+
+Create a new factor variable in the dataset with two levels ("weekday" and "weekend") indicating whether a given date is a weekday or weekend day
+```{r,echo=TRUE}
+period <- factor(as.numeric(wday(activity.new$date)==1|wday(activity.new$date)==7),
+                 c(0,1),c("weekday","weekend"))
+activity.new <- cbind(activity.new,period)
+```
+
+Organize data by time period and time interval
+```{r,echo=TRUE}
+activity.new <- group_by(activity.new,period,interval)
+```
+
+Calculate the number of steps taken per period and per interval, averaged across all days
+```{r,echo=TRUE}
+steps.per.interval.new <- summarize(activity.new,avg=mean(steps))
+```
+
+Plot for the two periods, the number of steps taken per interval, averaged across all days
+```{r,echo=TRUE,label=Fig6}
+xyplot(steps.per.interval.new$avg ~
+     steps.per.interval.new$interval|steps.per.interval.new$period,
+     type="l",lwd=2,layout=c(1,2),
+     main="Number of steps taken per interval (averaged across days)",
+     xlab="Time interval",ylab="Number of steps")
+```
+
+***

@@ -1,0 +1,54 @@
+# Getting and Cleaning Data Course Project
+
+## File: CodeBook.md
+### Author: Luis Sandino
+
+***
+
+Created on `r now()` using `r R.version$version.string`
+
+***
+
+## Codebook
+
+### Variables description
+
+| Variable name             | Description                                    |
+|---------------------------|------------------------------------------------|
+| Subject.ID                | ID number of the subject [1-30]                |
+| Activity.Name             | Activity name                                  |
+| Domain.Feature.Axis.Type (Variables from 3 to 68)| where                   |
+|                           | _Domain_ = time OR freq                        |
+|                    |_Feature_ = mix of __words__ describing the measurement|
+|                           | __Body__ -> acceleration - gravity acceleration|
+|                           | __Gravity__ -> total acceleration              |
+|                           | __Acc__ -> accelerometer sensor                |
+|                           | __Gyro__ -> gyroscope sensor                   |
+|                           | __Jerk__ -> jerk signal (from derivation)      |
+|                           | __Mag__ -> Euclidean magnitude                 |
+|                           | _Axis_ = X, Y OR Z direction                   |
+|                           | _Type_ = mean OR std (standard deviation)      |
+
+### Tidy Dataset structure
+
+```{r}
+str(tidyDataset)
+```
+
+### Full list of variable names
+
+```{r}
+names(tidyDataset)
+```
+
+### A few rows of data
+
+```{r}
+head(tidyDataset,10)
+```
+
+### Summary of variables
+
+```{r}
+summary(tidyDataset)
+```

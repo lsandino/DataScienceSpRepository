@@ -1,0 +1,170 @@
+---
+title: "Study of The Effect of Vitamin C on Tooth Growth in Guinea Pigs"
+author: "Luis A Sandino"
+output: pdf_document
+---
+
+***
+```{r,echo=FALSE,message=FALSE,results='hide'}
+library(lubridate)
+library(dplyr)
+library(ggplot2)
+library(knitr)
+Sys.setlocale("LC_TIME", "English")
+options(scipen = 999)
+```
+
+Created on `r now()` using `r R.version$version.string`
+
+***
+
+## Synopsis
+
+This project performs a basic inferential analysis of the ToothGrowth data in the R datasets package. According to the help file: *The response is the length of odontoblasts (cells responsible for tooth growth) in 60 guinea pigs. Each animal received one of three dose levels of vitamin C (0.5, 1, and 2 mg/day) by one of two delivery methods, (orange juice or ascorbic acid (a form of vitamin C and coded as VC).*
+
+##1. Load the ToothGrowth data and perform some basic exploratory data analyses
+
+Load the dataset and convert variable dose to factor:
+```{r,tidy=TRUE}
+# 
+library(datasets)
+data(ToothGrowth)
+ToothGrowth$dose <- as.factor(ToothGrowth$dose)
+```
+
+Inspect the structure of the data:
+```{r,tidy=TRUE}
+str(ToothGrowth)
+```
+
+##2. Provide a basic summary of the data
+
+Obtain a summary of the data:
+```{r,tidy=TRUE}
+ToothGrowth %>% 
+        group_by(supp,dose) %>%
+        summarise(q25th = quantile(len,0.25),
+                  Median = quantile(len,0.5),
+                  q75th = quantile(len,0.75),
+                  Mean = mean(len),
+                  SD = sd(len)) -> data
+data
+```
+
+Visualize the data with box plots:
+```{r,tidy=FALSE,fig.height=3,fig.width=7}
+ggplot(data=ToothGrowth, aes(x=dose, y=len, fill=supp)) +
+        geom_boxplot() +
+        facet_grid(. ~ supp) +
+        xlab("Dose [mg/day]") +
+        ylab("Cell length") +
+        guides(fill=guide_legend(title="Supplement type"))
+```
+
+The figure shows that the odontoblasts lenght presents a positive correlation regarding the dosage for both supplement types (VC and OJ)
+
+##3. Use hypothesis tests to compare tooth growth by supplement type and dose
+
+```{r,echo=FALSE}
+ToothGrowth.supp_OJ_doses_.5_1 <- subset (ToothGrowth, supp == "OJ" & dose %in% c(0.5, 1.0)) 
+ToothGrowth.supp_OJ_doses_.5_2 <- subset (ToothGrowth, supp == "OJ" & dose %in% c(0.5, 2.0)) 
+ToothGrowth.supp_OJ_doses_1_2 <- subset (ToothGrowth, supp == "OJ" & dose %in% c(1.0, 2.0)) 
+```
+```{r,echo=FALSE}
+t1 <- t.test(len ~ dose, data = ToothGrowth.supp_OJ_doses_.5_1,
+       paired = FALSE, var.equal = FALSE,
+       mu = 0,alternative = "two.sided",conf.level = 0.95)
+t2 <- t.test(len ~ dose, data = ToothGrowth.supp_OJ_doses_.5_2,
+       paired = FALSE, var.equal = FALSE,
+       mu = 0,alternative = "two.sided",conf.level = 0.95)
+t3 <- t.test(len ~ dose, data = ToothGrowth.supp_OJ_doses_1_2,
+       paired = FALSE, var.equal = FALSE,
+       mu = 0,alternative = "two.sided",conf.level = 0.95)
+results <- data.frame(c(t1$p.value,t2$p.value,t3$p.value),
+                      round(c(t1$conf.int[1],t2$conf.int[1],t3$conf.int[1]),2),
+                      round(c(t1$conf.int[2],t2$conf.int[2],t3$conf.int[2]),2),
+                      row.names=c(".5 vs 1",".5 vs 2","1 vs 2"))
+names(results) <- c("P-Value","Conf. Int. low","Conf. Int. high")
+```
+```{r,echo=FALSE}
+kable(results,align='c',caption="Analysis of dose pairs for supplement type OJ")
+```
+
+As can be seen, all p-values are less than 0.05, therefore in all cases the null hypothesis is rejected. There is strong evidence in favour of the alternative hypothesis: *true difference in means is not equal to 0*
+
+```{r,echo=FALSE}
+ToothGrowth.supp_VC_doses_.5_1 <- subset (ToothGrowth, supp == "VC" & dose %in% c(0.5, 1.0)) 
+ToothGrowth.supp_VC_doses_.5_2 <- subset (ToothGrowth, supp == "VC" & dose %in% c(0.5, 2.0)) 
+ToothGrowth.supp_VC_doses_1_2 <- subset (ToothGrowth, supp == "VC" & dose %in% c(1.0, 2.0)) 
+```
+```{r,echo=FALSE}
+t1 <- t.test(len ~ dose, data = ToothGrowth.supp_VC_doses_.5_1,
+       paired = FALSE, var.equal = FALSE,
+       mu = 0,alternative = "two.sided",conf.level = 0.95)
+t2 <- t.test(len ~ dose, data = ToothGrowth.supp_VC_doses_.5_2,
+       paired = FALSE, var.equal = FALSE,
+       mu = 0,alternative = "two.sided",conf.level = 0.95)
+t3 <- t.test(len ~ dose, data = ToothGrowth.supp_VC_doses_1_2,
+       paired = FALSE, var.equal = FALSE,
+       mu = 0,alternative = "two.sided",conf.level = 0.95)
+results <- data.frame(c(t1$p.value,t2$p.value,t3$p.value),
+                      round(c(t1$conf.int[1],t2$conf.int[1],t3$conf.int[1]),2),
+                      round(c(t1$conf.int[2],t2$conf.int[2],t3$conf.int[2]),2),
+                      row.names=c(".5 vs 1",".5 vs 2","1 vs 2"))
+names(results) <- c("P-Value","Conf. Int. low","Conf. Int. high")
+```
+```{r,echo=FALSE}
+kable(results,align='c',caption="Analysis of dose pairs for supplement type VC")
+```
+
+As can be seen, all p-values are less than 0.05, therefore in all cases the null hypothesis is rejected. There is strong evidence in favour of the alternative hypothesis: *true difference in means is not equal to 0*
+
+```{r,echo=FALSE}
+ToothGrowth.dose_.5 <- subset (ToothGrowth, dose == 0.5) 
+ToothGrowth.dose_1 <- subset (ToothGrowth, dose == 1) 
+ToothGrowth.dose_2 <- subset (ToothGrowth, dose == 2) 
+```
+```{r,echo=FALSE}
+t1 <- t.test(len ~ supp, data = ToothGrowth.dose_.5,
+       paired = FALSE, var.equal = FALSE,
+       mu = 0,alternative = "two.sided",conf.level = 0.95)
+t2 <- t.test(len ~ supp, data = ToothGrowth.dose_1,
+       paired = FALSE, var.equal = FALSE,
+       mu = 0,alternative = "two.sided",conf.level = 0.95)
+t3 <- t.test(len ~ supp, data = ToothGrowth.dose_2,
+       paired = FALSE, var.equal = FALSE,
+       mu = 0,alternative = "two.sided",conf.level = 0.95)
+results <- data.frame(c(t1$p.value,t2$p.value,t3$p.value),
+                      round(c(t1$conf.int[1],t2$conf.int[1],t3$conf.int[1]),2),
+                      round(c(t1$conf.int[2],t2$conf.int[2],t3$conf.int[2]),2),
+                      row.names=c(".5","1","2"))
+names(results) <- c("P-Value","Conf. Int. low","Conf. Int. high")
+```
+```{r,echo=FALSE}
+kable(results,align='c',caption="Analysis of supplement types OJ vs VC")
+```
+
+As can be seen, p-values are less than 0.05 for doses .5 and 1. Therefore, in this two cases the null hypothesis is rejected. There is strong evidence in favour of the alternative hypothesis: *true difference in means is not equal to 0*. On the contrary, p-value is grater than 0.05 for dose 2. Thus, we fail to reject the null hypotesis.
+
+##4. State conclusions and the assumptions needed
+
+**Conclusions of the study:**
+
+1. There is strong evidence that increasing dose levels of Vitamin C leads to increased length of odontoblasts and therefore increased tooth growth in Guinea Pigs.
+2. For doses of .5 and 1 mg/day, there is evidence that the administration via Oranje Juice is in favor of tooth growth
+3. For doses of 2 mg/day, no difference can be satated between the two supplement types with the given data
+
+**Main assumptions:**
+
+1. The sample size of 60 Guinea Pigs is representative of the entire population of Guinea Pigs.
+2. For the t-tests carried on, the variances are assumed to be different for the groups being compared.
+3. For the t-tests carried on, the data is assumed to be unpaired.
+4. The confidence level used is 95%
+
+The code used for t test is: 
+```{r,eval=FALSE}
+t.test(x ~ y, data = data_subset,
+       var.equal = FALSE, paired = FALSE,
+       mu = 0,alternative = "two.sided",conf.level = 0.95)
+```
+where **x = len** and **y = dose** for *table 1* and *2*; and **y = supp** for *table 3*
